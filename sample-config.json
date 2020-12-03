@@ -1,29 +1,15 @@
 {
-  "bridge": {
-    "name": "Maggie",
-    "username": "CC:22:3D:F3:CE:35",
-    "port": 51826,
-    "pin": "031-45-154",
-    "ssdp": 1900
-  },
-
-  "description": "HomeBridge HTTP Status Control",
-
   "platforms": [{
     "platform": "HBay",
     "devices": [{
-        "lightName": "Ceiling Two",
-        "fanName": "Fan Two",
-        "irBlaster": "ESP_8695EC.local",
-        "remote_code": "0000",
-        "out": 3
+        "lightName": "Kitchen Light",
+        "fanName": "Kitchen Fan",
+        "remote_code": 0x8
       },
       {
-        "lightName": "Ceiling One",
-        "fanName": "Fan One",
-        "irBlaster": "ESP_8695EC.local",
-        "remote_code": "1000",
-        "out": 3
+        "lightName": "Bedroom Ceiling Light",
+        "fanName": "Bedroom Fan",
+        "remote_code": 0x9
       }
     ]
   }],

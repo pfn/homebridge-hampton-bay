@@ -13,35 +13,21 @@
 "use strict";
 
 var debug = require('debug')('HBay');
-var request = require("request");
 const packageConfig = require('./package.json');
 var Service, Characteristic, cmdQueue;
 var os = require("os");
+const { exec } = require('child_process');
 var hostname = os.hostname();
-const dns = require('dns');
 
 var fanCommands = {
-  fanOff: "111101",
-  fanLow: "110111",
-  fanMed: "101111",
-  fanHigh: "011111",
-  //  Down: "110011",
-  lightD: "111110",
-  //  reverse: "111011",
-  //  forward: "111010",
-  lightND: "111110",
-  //  sync: "111111",
-  header: "350",
-  // Format is Off time, On time
-  zero: ["295", "700"],
-  one: ["695", "300"],
-  //  winter: "10",
-  //  summer: "00",
-  pulse: 8,
-  pdelay: 10,
-  rdelay: 600,
-  busy: 400,
-  start: 33
+  // bedroom = 0x200, kitchen = 0x100
+  fanOff: 0x10,
+  fanLow: 0x4,
+  fanMed: 0x2,
+  fanHigh: 0x1,
+  lightND: 0x8,
+  lightD: 0x0,
+  busy: 400 // delay
 };
 
 module.exports = function(homebridge) {
@@ -77,14 +63,10 @@ function HBay(log, config, api) {
   this.lightName = config.lightName || this.name + " light";
 
   this.remote_code = config.remote_code;
-  this.irBlaster = config.irBlaster;
-
-  findDevice.call(this);
 
   this.dimmable = config.dimmable || false; // Default to not dimmable
   this.light = (config.light !== false); // Default to has light
   this.direction = config.winter || true; // Hampton does not support direction
-  this.out = config.out || 1;
 
   debug("Light", this.light);
   debug("Dimmable", this.dimmable);
@@ -180,7 +162,7 @@ HBay.prototype._fanOn = function(on, callback) {
   if (on) {
     // Is the fan already on?  Don't repeat command
     if (!this._fan.getCharacteristic(Characteristic.On).value) {
-      execQueue.call(this, "toggle", this.url, _fanSpeed(this._fan.getCharacteristic(Characteristic.RotationSpeed).value), 1, fanCommands.busy, function(error, response, responseBody) {
+      execQueue.call(this, "toggle", fanSpeed(this._fan.getCharacteristic(Characteristic.RotationSpeed).value), 1, fanCommands.busy, function(error, response, responseBody) {
         if (error) {
           this.log('HBay failed: %s', error.message);
           callback(error);
@@ -194,7 +176,7 @@ HBay.prototype._fanOn = function(on, callback) {
       callback();
     }
   } else {
-    execQueue.call(this, "toggle", this.url, fanCommands.fanOff, 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "toggle", fanCommands.fanOff, 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -209,7 +191,7 @@ HBay.prototype._fanOn = function(on, callback) {
 HBay.prototype._fanSpeed = function(value, callback) {
   if (value > 0) {
     this.log("Setting " + this.fanName + " _fanSpeed to " + value);
-    execQueue.call(this, "toggle", this.url, _fanSpeed(value), 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "toggle", fanSpeed(value), 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -231,7 +213,7 @@ HBay.prototype._lightOn = function(on, callback) {
   this.log("Setting " + this.lightName + " _lightOn to " + on);
 
   if (on && !this._light.getCharacteristic(Characteristic.On).value) {
-    execQueue.call(this, "toggle", this.url, fanCommands.light, 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "toggle", fanCommands.light, 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -241,7 +223,7 @@ HBay.prototype._lightOn = function(on, callback) {
       }
     }.bind(this));
   } else if (!on && this._light.getCharacteristic(Characteristic.On).value) {
-    execQueue.call(this, "toggle", this.url, fanCommands.light, 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "toggle", fanCommands.light, 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -261,7 +243,7 @@ HBay.prototype._fanDirection = function(on, callback) {
 
   if (on) {
     this.direction = true;
-    execQueue.call(this, "direction", this.url, fanCommands.reverse, 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "direction", fanCommands.reverse, 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -272,7 +254,7 @@ HBay.prototype._fanDirection = function(on, callback) {
     }.bind(this));
   } else {
     this.direction = false;
-    execQueue.call(this, "direction", this.url, fanCommands.forward, 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "direction", fanCommands.forward, 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -309,7 +291,7 @@ HBay.prototype._lightBrightness = function(value, callback) {
   if (delta < 0) {
     // Turn down device
     this.log("Turning down " + this.lightName + " by " + Math.abs(delta));
-    execQueue.call(this, "down", this.url, this.down_data, Math.abs(delta) + this.count, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "down", this.down_data, Math.abs(delta) + this.count, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -322,7 +304,7 @@ HBay.prototype._lightBrightness = function(value, callback) {
     // Turn up device
 
     this.log("Turning up " + this.lightName + " by " + Math.abs(delta));
-    execQueue.call(this, "up", this.url, this.up_data, Math.abs(delta) + this.count, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "up", this.up_data, Math.abs(delta) + this.count, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -343,7 +325,7 @@ HBay.prototype._setState = function(on, callback) {
   debug("_setState", this.lightName, on, this._fan.getCharacteristic(Characteristic.On).value);
 
   if (on && !this._fan.getCharacteristic(Characteristic.On).value) {
-    execQueue.call(this, "on", this.url, this.on_data, 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "on", this.on_data, 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -359,7 +341,7 @@ HBay.prototype._setState = function(on, callback) {
       }
     }.bind(this));
   } else if (!on && this._fan.getCharacteristic(Characteristic.On).value) {
-    execQueue.call(this, "off", this.url, this.off_data, 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "off", this.off_data, 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
@@ -376,57 +358,13 @@ HBay.prototype._setState = function(on, callback) {
 
 HBay.prototype.resetDevice = function() {
   debug("Reseting volume on device", this.name);
-  execQueue.call(this, "on", this.url, this.on_data, 1, fanCommands.busy);
-  execQueue.call(this, "down", this.url, this.down_data, this.steps, fanCommands.busy);
-  execQueue.call(this, "up", this.url, this.up_data, 2, fanCommands.busy);
-  execQueue.call(this, "off", this.url, this.off_data, 1, fanCommands.busy, function(error, response, responseBody) {
+  execQueue.call(this, "on", this.on_data, 1, fanCommands.busy);
+  execQueue.call(this, "down", this.down_data, this.steps, fanCommands.busy);
+  execQueue.call(this, "up", this.up_data, 2, fanCommands.busy);
+  execQueue.call(this, "off", this.off_data, 1, fanCommands.busy, function(error, response, responseBody) {
     this._fan.getCharacteristic(Characteristic.RotationSpeed).updateValue(2);
   }.bind(this));
 };
-
-function httpRequest(name, url, command, count, sleep, callback) {
-  // debug("url",url,"Data",data);
-  // Content-Length is a workaround for a bug in both request and ESP8266WebServer - request uses lower case, and ESP8266WebServer only uses upper case
-
-  var cmdTime = Date.now() + sleep * count;
-
-  var data = _buildBody.call(this, command);
-
-  data[0].repeat = count;
-  data[0].rdelay = fanCommands.rdelay;
-
-  var body = JSON.stringify(data);
-  var that = this;
-  // debug("httpRequest", this);
-  if (this.url) {
-    request({
-        url: url,
-        method: "POST",
-        timeout: 5000,
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': body.length
-        },
-        body: body
-      },
-      function(error, response, body) {
-        if (response) {
-          //  debug("Response", response.statusCode, response.statusMessage);
-        } else {
-          debug("Error", name, url, count, sleep, error);
-          that.url = null;
-          // debug("Error - this", that);
-          findDevice.call(that);
-        }
-
-        setTimeout(function() {
-          if (callback) callback(error, response, body);
-        }, cmdTime - Date.now());
-      });
-  } else {
-    callback(new Error("Unknown host " + this.irBlaster), "", "");
-  }
-}
 
 cmdQueue = {
   items: [],
@@ -449,7 +387,7 @@ function runQueue() {
     var that = cmds[0];
     var args = cmds[1];
 
-    if (args.length > 5) {
+    if (typeof(args[args.length -1]) === 'function') {
       // wrap callback with another function to toggle isRunning
 
       var callback = args[args.length - 1];
@@ -467,64 +405,18 @@ function runQueue() {
       };
       args.length = args.length + 1;
     }
-    httpRequest.apply(that, args);
+    fanctl.apply(that, args);
   }
 }
 
-function _buildBody(command) {
-  // This is the command structure for
-  // debug("This", that);
+function fanctl(remote_code, command, count, sleep, callback) {
+  var cmdTime = Date.now() + sleep * count;
 
-  if (this.direction) {
-    var summer = fanCommands.summer;
-  } else {
-    var summer = fanCommands.winter;
-  }
-
-  var remoteCommand = "0" + this.remote_code + fanCommands.dimmable + command;
-  // debug("This is the command", _splitAt8(remoteCommand));
-
-  var data = [];
-  data.push(fanCommands.header);
-  for (var x = 0; x < remoteCommand.length; x++) {
-    switch (remoteCommand.charAt(x)) {
-      case "0":
-        for (var y = 0; y < fanCommands.zero.length; y++) {
-          data.push(fanCommands.zero[y]);
-        }
-        break;
-      case "1":
-        for (var y = 0; y < fanCommands.zero.length; y++) {
-          data.push(fanCommands.one[y]);
-        }
-        break;
-      default:
-        this.log("Missing 1 or 0", remoteCommand);
-        break;
-    }
-  }
-
-  var body = [{
-    "type": "raw",
-    "out": this.out,
-    "khz": 500,
-    "data": data,
-    "pulse": fanCommands.pulse,
-    "pdelay": fanCommands.pdelay
-  }];
-  // debug("This is the body", body);
-  return body;
-}
-
-function _splitAt8(string) {
-  var response = "";
-  for (var x = 0; x < string.length; x++) {
-    if (x % 8 === 0) {
-      response += " ";
-    }
-    response += string.charAt(x);
-  }
-  return response;
+  exec("/home/homebridge/fanctl/bin/fanctl ${remote_code | command}", (err, stdo, stde) => {
+    setTimeout(function() {
+      if (callback) callback(error, response, body);
+    }, cmdTime - Date.now());
+  });
 }
 
 function _fanSpeed(speed) {
@@ -545,21 +437,4 @@ function _fanSpeed(speed) {
       break;
   }
   return command;
-}
-
-function findDevice() {
-  debug("findDevice(%s)", this.irBlaster);
-  dns.lookup(this.irBlaster, function(err, result) {
-    if (err || result === undefined) {
-      // if failed, retry device discovery every minute
-      debug("WARNING: Dns lookup failed", err, result);
-      this.log("WARNING: DNS name resolution of %s failed, retrying in 1 minute", this.irBlaster);
-      setTimeout(function() {
-        findDevice.call(this);
-      }.bind(this), 60 * 1000);
-    } else {
-      this.url = "http://" + result + "/json?simple=1";
-      debug("findDevice(%s) ==> %s", this.irBlaster, this.url);
-    }
-  }.bind(this));
 }

@@ -1,25 +1,24 @@
 {
   "name": "homebridge-hampton-bay",
-  "version": "0.1.2",
-  "description": "Homebridge Plugin for the FAN61T-4SP 315Mhz Fan Remote",
+  "version": "0.2.0",
+  "description": "Homebridge Plugin for the UC7078T remote",
   "license": "ISC",
   "keywords": [
     "homebridge-plugin",
-    "esp8266"
+    "uc7078t"
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/NorthernMan54/homebridge-hampton-bay.git"
+    "url": "git://github.com/pfn/homebridge-hampton-bay.git"
   },
   "bugs": {
-    "url": "https://github.com/NorthernMan54/homebridge-hampton-bay/issues"
+    "url": "https://github.com/pfn/homebridge-hampton-bay/issues"
   },
   "engines": {
     "node": ">=0.12.0",
     "homebridge": ">=0.2.0"
   },
   "dependencies": {
-    "request": "^2.83.0",
     "debug": "^2.2.0"
   }
 }
