@@ -4,12 +4,12 @@
     "devices": [{
         "lightName": "Kitchen Light",
         "fanName": "Kitchen Fan",
-        "remote_code": 0x8
+        "remote_code": 256
       },
       {
         "lightName": "Bedroom Ceiling Light",
         "fanName": "Bedroom Fan",
-        "remote_code": 0x9
+        "remote_code": 512
       }
     ]
   }],

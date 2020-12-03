@@ -409,14 +409,22 @@ function runQueue() {
   }
 }
 
-function fanctl(remote_code, command, count, sleep, callback) {
+function fanctl(command, code, count, sleep, callback) {
   var cmdTime = Date.now() + sleep * count;
 
-  exec("/home/homebridge/fanctl/bin/fanctl ${remote_code | command}", (err, stdo, stde) => {
-    setTimeout(function() {
-      if (callback) callback(err, stdo, stde);
-    }, cmdTime - Date.now());
-  });
+  this.log(`${command}: remote: ${this.remote_code}, command: ${code}`);
+
+  if (code == null) {
+    this.log(`${command}, code not set`);
+    callback(null, "", "");
+  } else {
+    exec(`/home/homebridge/fanctl/bin/fanctl ${this.remote_code | code}`, (err, stdo, stde) => {
+      setTimeout(function() {
+        if (typeof(callback) === 'function') callback(err, stdo, stde);
+        else this.log("callback is not a function: " + typeof(callback));
+      }, cmdTime - Date.now());
+    });
+  }
 }
 
 function _fanSpeed(speed) {
