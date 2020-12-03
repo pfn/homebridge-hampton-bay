@@ -409,10 +409,12 @@ function runQueue() {
   }
 }
 
-function fanctl(remote_code, command, count, sleep, callback) {
+function fanctl(command, count, sleep, callback) {
   var cmdTime = Date.now() + sleep * count;
 
-  exec("/home/homebridge/fanctl/bin/fanctl ${remote_code | command}", (err, stdo, stde) => {
+  this.log(`Remote: ${this.remote_code}, Command: ${command}`);
+
+  exec(`/home/homebridge/fanctl/bin/fanctl ${this.remote_code | command}`, (err, stdo, stde) => {
     setTimeout(function() {
       if (callback) callback(err, stdo, stde);
     }, cmdTime - Date.now());
