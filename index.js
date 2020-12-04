@@ -27,6 +27,7 @@ var fanCommands = {
   fanHigh: 0x1,
   lightND: 0x8,
   lightD: 0x0,
+  start: 33, // initial fan speed
   busy: 400 // delay
 };
 
@@ -162,7 +163,7 @@ HBay.prototype._fanOn = function(on, callback) {
   if (on) {
     // Is the fan already on?  Don't repeat command
     if (!this._fan.getCharacteristic(Characteristic.On).value) {
-      execQueue.call(this, "toggle", fanSpeed(this._fan.getCharacteristic(Characteristic.RotationSpeed).value), 1, fanCommands.busy, function(error, response, responseBody) {
+      execQueue.call(this, "toggle", _fanSpeed(this._fan.getCharacteristic(Characteristic.RotationSpeed).value), 1, fanCommands.busy, function(error, response, responseBody) {
         if (error) {
           this.log('HBay failed: %s', error.message);
           callback(error);
@@ -191,7 +192,7 @@ HBay.prototype._fanOn = function(on, callback) {
 HBay.prototype._fanSpeed = function(value, callback) {
   if (value > 0) {
     this.log("Setting " + this.fanName + " _fanSpeed to " + value);
-    execQueue.call(this, "toggle", fanSpeed(value), 1, fanCommands.busy, function(error, response, responseBody) {
+    execQueue.call(this, "toggle", _fanSpeed(value), 1, fanCommands.busy, function(error, response, responseBody) {
       if (error) {
         this.log('HBay failed: %s', error.message);
         callback(error);
